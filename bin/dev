@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run the driver in the foreground (stops the service meanwhile); page: http://127.0.0.1:8315
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+systemctl --user stop siri-remote.service 2>/dev/null || true
+trap 'systemctl --user start siri-remote.service 2>/dev/null || true' EXIT
+python3 -I src/remote.py

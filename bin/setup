@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Run as your desktop user. Only device rules and pairing need root.
+# Install: udev access, pairing, systemd user service. Run as your desktop user;
+# only device rules and pairing use sudo.
 set -euo pipefail
 
-project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 if (( EUID == 0 )); then
-    echo 'Run ./install.sh as your desktop user, not as root.' >&2
+    echo 'Run bin/setup as your desktop user, not as root.' >&2
     exit 1
 fi
 for cmd in python3 bluetoothctl btmon btmgmt stdbuf sudo systemctl udevadm modprobe pactl; do
@@ -38,7 +39,7 @@ while read -r kind mac rest; do
     fi
 done <<< "$(bluetoothctl devices Paired)"
 if [[ "$paired" == false ]]; then
-    sudo "$(command -v python3)" "$project_dir/pair.py"
+    sudo "$(command -v python3)" "$project_dir/src/pair.py"
 fi
 
 unit_dir=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
@@ -51,7 +52,7 @@ unit_quote() {
     value=${value//%/%%}
     printf '"%s"' "$value"
 }
-exec_path=$project_dir/remote.py
+exec_path=$project_dir/src/remote.py
 exec_path=${exec_path//\$/\$\$}
 cat > "$unit_dir/siri-remote.service" <<UNIT
 [Unit]
@@ -71,6 +72,6 @@ WantedBy=graphical-session.target
 UNIT
 systemctl --user daemon-reload
 systemctl --user enable siri-remote.service
-printf '%s\n' 'Installed and enabled siri-remote.service; no service was started or restarted.' \
-    'Start when ready: systemctl --user start siri-remote.service' \
-    'Viewer: http://127.0.0.1:8315'
+systemctl --user restart siri-remote.service
+printf '%s\n' 'Running: siri-remote.service · page: http://127.0.0.1:8315' \
+    'Logs: journalctl --user -u siri-remote.service -f'
