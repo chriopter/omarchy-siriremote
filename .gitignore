@@ -1,0 +1,6 @@
+rec/
+*.log
+settings.json
+remote.png
+codex-answer.md
+__pycache__/

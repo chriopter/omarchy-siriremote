@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Siri Remote Live</title>
+<style>
+:root{--bg:#fff;--fg:#1d1d1f;--dim:#6e6e73;--on:#0a84ff}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif;display:flex;gap:48px;padding:30px;align-items:flex-start;flex-wrap:wrap}
+/* image is 674x2576; overlay coordinates are in that pixel space, scaled via % */
+.remote{position:relative;height:calc(100vh - 60px);max-height:1100px;aspect-ratio:674/2576;flex:none}
+.remote svg{width:100%;height:100%;display:block;filter:drop-shadow(0 10px 30px #0003)}
+.hit{position:absolute;border-radius:50%;opacity:0;transition:opacity .06s;background:radial-gradient(circle,#0a84ffcc 0%,#0a84ff88 60%,#0a84ff00 100%);box-shadow:0 0 30px 6px var(--on);pointer-events:none}
+.hit.on{opacity:1}
+.hit.pill{border-radius:999px}
+.hit.dot{background:var(--on)}
+#touch{background:radial-gradient(circle,#30d15866 0%,#30d15822 70%,#30d15800 100%);box-shadow:none}
+.panel{flex:1;min-width:320px}
+h1{margin:0 0 6px;font-size:22px}#status{color:var(--dim);margin-bottom:12px}
+#bat{display:flex;align-items:center;gap:12px;margin-bottom:18px;font-size:17px}
+.cell{width:46px;height:22px;border:2px solid #888;border-radius:5px;position:relative;padding:2px;box-sizing:border-box}
+.cell::after{content:"";position:absolute;right:-6px;top:5px;width:3px;height:8px;background:#888;border-radius:0 2px 2px 0}
+.fill{height:100%;background:#30d158;border-radius:2px;width:0;transition:width .3s}
+.fill.unk{background:repeating-linear-gradient(45deg,#ccc 0 4px,#eee 4px 8px);width:100%}
+#bt{border:1px solid #ddd;border-radius:12px;padding:12px 14px;margin-bottom:18px;max-width:640px}
+.bth{font-weight:600;margin-bottom:8px}#btdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#0a84ff;margin-left:6px;animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.2}}
+.banner{background:#30d158;color:#fff;font-weight:600;padding:10px 14px;border-radius:10px;margin-bottom:8px;font-size:18px}
+#voice{border:1px solid #ddd;border-radius:12px;padding:12px 14px;margin-bottom:18px;max-width:640px}
+.recrow{display:flex;align-items:center;gap:10px;margin-top:8px}
+.recbadge{font-weight:700;letter-spacing:.05em;padding:4px 10px;border-radius:8px;background:#f2f2f2;color:#c7c7cc;transition:all .05s}
+.recbadge.on{background:#ff3b30;color:#fff;box-shadow:0 0 18px #ff3b3088;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.75}}
+.sbadge{padding:4px 10px;border-radius:8px;background:#f2f2f2;color:#c7c7cc;font-weight:600}.sbadge.on{background:#0a84ff;color:#fff}
+.txinfo{font-size:13px;color:#6e6e73}
+.meter{height:8px;background:#eee;border-radius:4px;overflow:hidden;margin:8px 0}#vbar{height:100%;width:0;background:#ff375f;transition:width .1s}
+.rec{display:flex;align-items:center;gap:10px;font-size:13px;color:#6e6e73;margin-top:6px}.rec audio{height:32px;flex:1}
+#tune{border:1px solid #ddd;border-radius:12px;padding:12px 14px;margin-bottom:18px;max-width:640px}
+.trow{display:grid;grid-template-columns:150px 1fr 56px;gap:10px;align-items:center;font-size:13px;margin:6px 0}
+.trow .lab{color:#1d1d1f}.trow .lab small{display:block;color:#8e8e93;font-size:11px}
+.trow input[type=range]{width:100%}.trow .val{font-variant-numeric:tabular-nums;text-align:right;color:#6e6e73}
+.tchecks{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;margin-top:8px}
+#now{font-size:30px;min-height:44px;margin-bottom:16px}
+#log{font:12px ui-monospace,monospace;color:#555;max-height:60vh;overflow:auto;white-space:pre}
+#log .btn{color:#0060df}
+</style></head><body>
+<div class="remote" id="remote"><svg viewBox="0 0 674 2576" xmlns="http://www.w3.org/2000/svg" aria-label="Siri Remote">
+ <defs><linearGradient id="alu" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9e9ec"/><stop offset="1" stop-color="#b8b8bd"/></linearGradient></defs>
+ <rect x="8" y="8" width="658" height="2560" rx="96" fill="url(#alu)" stroke="#a5a5aa" stroke-width="4"/>
+ <rect x="320" y="96" width="34" height="14" rx="7" fill="#2a2a2c"/>
+ <circle cx="519" cy="105" r="58" fill="#f2f2f4" stroke="#8e8e93" stroke-width="3"/>
+ <path d="M519 78v26M500 92a28 28 0 1 0 38 0" fill="none" stroke="#1d1d1f" stroke-width="6" stroke-linecap="round"/>
+ <rect x="660" y="400" width="10" height="170" rx="5" fill="#c7c7cc"/>
+ <circle cx="332" cy="540" r="291" fill="#1c1c1e"/><circle cx="332" cy="540" r="165" fill="#2c2c2e"/>
+ <g fill="#8e8e93"><circle cx="332" cy="282" r="9"/><circle cx="332" cy="798" r="9"/><circle cx="72" cy="540" r="9"/><circle cx="592" cy="540" r="9"/></g>
+ <g fill="#1c1c1e"><circle cx="190" cy="974" r="114"/><circle cx="474" cy="974" r="114"/><circle cx="190" cy="1255" r="114"/><circle cx="190" cy="1534" r="114"/>
+  <rect x="365" y="1141" width="218" height="508" rx="109"/></g>
+ <g fill="none" stroke="#f2f2f7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M210 934l-40 40 40 40"/>
+  <rect x="424" y="944" width="100" height="62" rx="8"/><path d="M454 1024h40"/>
+  <path d="M160 1230v50l38-25z"/><path d="M215 1230v50M235 1230v50"/>
+  <path d="M155 1514h24l30-24v88l-30-24h-24zM150 1494l90 84"/>
+  <path d="M474 1225v50M449 1250h50M449 1560h50"/></g>
+</svg></div>
+<div class="panel">
+  <h1>Siri Remote Live</h1>
+  <div id="status">verbinde …</div>
+  <div id="bat"><div class="cell"><div class="fill unk" id="fill"></div></div><span id="battxt">Akku: unbekannt</span></div>
+  <div id="bt"><div class="bth">Bluetooth-Kopplung <span id="btdot"></span></div><div id="btlist">suche Apple-Geräte …</div></div>
+  <div id="voice"><div class="bth">🎙️ Mikrofon <span id="vstate" style="font-weight:400;color:#6e6e73">Siri-Taste halten und sprechen</span></div>
+    <div class="recrow"><span id="recbadge" class="recbadge">● REC</span><span id="siribadge" class="sbadge">Siri</span><span id="txinfo" class="txinfo"></span></div>
+    <div class="meter"><div id="vbar"></div></div><div id="recs"></div></div>
+  <div id="tune"><div class="bth">🖱️ Touch-Tuning <span id="tsaved" style="font-weight:400;color:#6e6e73"></span></div><div id="tunerows"></div></div>
+  <div id="modebox" style="margin-bottom:14px;font-size:15px"><b id="mode">Ring: herdr</b> <span style="color:#6e6e73;font-size:13px" id="modehint">Ring ←/→ Tab · ↑/↓ Workspace (herdr) · TV = nächstes Pane · Power = Omarchy-Workspace</span></div>
+  <div id="now">–</div>
+  <div id="touchhex" style="font:12px ui-monospace,monospace;color:#6e6e73;margin-bottom:10px">Touch: –</div>
+  <div id="log"></div>
+</div>
+<script>
+const W=674,H=2576;
+// [id, cx, cy, w, h, extra class] in the SVG viewBox (674x2576)
+const HITS=[
+ ["power",519,105,120,120],
+ ["touch",332,540,560,560],
+ ["select",332,540,330,330],
+ ["up",332,280,90,90,"dot"],["down",332,800,90,90,"dot"],["left",72,540,90,90,"dot"],["right",592,540,90,90,"dot"],
+ ["menu",190,974,230,230],["tv",474,974,230,230],
+ ["play_pause",190,1255,230,230],["mute",190,1534,230,230],
+ ["vol_up",474,1250,218,250,"pill"],["vol_down",474,1530,218,250,"pill"],
+ ["siri",668,480,30,200,"pill"],
+];
+const R=document.getElementById("remote");
+for(const [id,cx,cy,w,h,c] of HITS){const d=document.createElement("div");d.className="hit "+(c||"");d.id=id;
+  Object.assign(d.style,{left:(cx-w/2)/W*100+"%",top:(cy-h/2)/H*100+"%",width:w/W*100+"%",height:h/H*100+"%"});R.appendChild(d);}
+const NAMES={menu:"Zurück",vol_up:"Lauter",vol_down:"Leiser",select:"Mitte (Klick)",power:"Power",siri:"Siri",tv:"TV",mute:"Stumm",play_pause:"Play/Pause",up:"Hoch",down:"Runter",left:"Links",right:"Rechts"};
+const log=document.getElementById("log");
+function line(t,cls){const d=document.createElement("div");if(cls)d.className=cls;d.textContent=new Date().toLocaleTimeString()+"  "+t;log.prepend(d);while(log.children.length>300)log.lastChild.remove();}
+function bat(m){const f=document.getElementById("fill"),t=document.getElementById("battxt");
+  const parts=[];
+  if(m.percent!=null){f.classList.remove("unk");f.style.width=m.percent+"%";f.style.background=m.percent<20?"#ff453a":"#30d158";parts.push(m.percent+" %");}
+  else{f.classList.add("unk");f.style.width="";parts.push("Prozent unbekannt");}
+  if(m.power)parts.push(m.status==="Charging"?"⚡ "+m.power:m.power);
+  else if(m.usb||m.status==="Charging")parts.push("⚡ lädt über USB");else if(m.status==="Full")parts.push("voll");else parts.push("Akku");
+  document.getElementById("btlist").innerHTML=m.bt?'<div class="banner">✓ Gekoppelt & verbunden per Bluetooth</div>':'<div style="color:#6e6e73">Bluetooth gekoppelt, gerade nicht verbunden – Taste drücken zum Aufwecken</div>';
+  t.textContent=parts.join(" · ");}
+const TUNE=[
+ ["gain","Tempo","Pixel pro Einheit",0.1,2,0.01],
+ ["k","Beschleunigung","Zuwachs pro Tempo",0,0.15,0.005],
+ ["cap","Max. Beschleunigung","Faktor-Obergrenze",1,10,0.1],
+ ["glide","Glättung","klein = weicher",0.05,1,0.01],
+ ["noise","Rauschfilter","Einheiten ignorieren",0,5,1],
+ ["touch_min","Berührung ab","Kontaktwert Start",50,200,1],
+ ["touch_keep","Berührung hält bis","Kontaktwert Ende",30,200,1],
+ ["settle_frames","Einschwingen","Meldungen nach Aufsetzen",0,12,1],
+ ["jump_max","Sprungfilter","max. Einheiten/Meldung",50,800,10]];
+let tuneTimer;
+function saveTune(patch){clearTimeout(tuneTimer);tuneTimer=setTimeout(()=>fetch("/settings",{method:"POST",body:JSON.stringify(patch)})
+  .then(r=>r.json()).then(()=>{const t=document.getElementById("tsaved");t.textContent="gespeichert ✓";setTimeout(()=>t.textContent="",1200);}),120);}
+fetch("/settings").then(r=>r.json()).then(cfg=>{const box=document.getElementById("tunerows");let pending={};
+  for(const [key,label,hint,min,max,step] of TUNE){const v=cfg[key]??min;const row=document.createElement("div");row.className="trow";
+    row.innerHTML=`<div class="lab">${label}<small>${hint}</small></div><input type="range" min="${min}" max="${max}" step="${step}" value="${v}"><div class="val">${v}</div>`;
+    const inp=row.querySelector("input"),out=row.querySelector(".val");
+    inp.oninput=()=>{out.textContent=inp.value;pending[key]=parseFloat(inp.value);saveTune(pending);};box.appendChild(row);}
+  const ch=document.createElement("div");ch.className="tchecks";
+  for(const [key,label] of [["invert_x","X umkehren"],["invert_y","Y umkehren"],["swap","Achsen tauschen"]]){
+    const l=document.createElement("label");l.innerHTML=`<input type="checkbox" ${cfg[key]?"checked":""}> ${label}`;
+    l.querySelector("input").onchange=e=>{pending[key]=e.target.checked;saveTune(pending);};ch.appendChild(l);}
+  const sel=document.createElement("label");sel.innerHTML=`Siri-Taste: <select><option value="dictate">Diktieren (Voxtype)</option><option value="echo">Echo</option></select>`;
+  const se=sel.querySelector("select");se.value=cfg.siri||"dictate";se.onchange=()=>{pending.siri=se.value;saveTune(pending);};ch.appendChild(sel);
+  box.appendChild(ch);});
+const es=new EventSource("/events");
+es.onmessage=e=>{const m=JSON.parse(e.data);
+  if(m.type==="version"){if(window.V&&window.V!==m.v)location.reload();window.V=m.v;return;}
+  if(m.type==="status"){document.getElementById("status").textContent=m.msg;line(m.msg);return;}
+  if(m.type==="battery"){bat(m);return;}
+  if(m.type==="voice"){const st=document.getElementById("vstate"),bar=document.getElementById("vbar");
+    if(m.state==="tx_on"){document.getElementById("recbadge").classList.add("on");document.getElementById("txinfo").textContent="Übertragung läuft …";return;}
+    if(m.state==="tx_off"){document.getElementById("recbadge").classList.remove("on");
+      document.getElementById("txinfo").textContent=`Übertragung ${m.dur} s`+(m.tail!=null?` · Nachlauf nach Loslassen ${m.tail} s`:"");return;}
+    if(m.state==="done_skip"){st.textContent="Siri-Taste halten und sprechen";st.style.color="";bar.style.width="0";document.getElementById("txinfo").textContent="kurz gedrückt → Enter";return;}
+    if(m.state==="stt"){document.getElementById("txinfo").textContent=m.msg;return;}
+    if(m.state==="start"){st.textContent="● nimmt auf …";st.style.color="#ff375f";}
+    if(m.state==="level"){bar.style.width=Math.min(100,m.rms/80)+"%";st.textContent="● nimmt auf … "+m.sec+" s";}
+    if(m.state==="done"){st.textContent="Siri-Taste halten und sprechen";st.style.color="";bar.style.width="0";
+      const d=document.createElement("div");d.className="rec";d.innerHTML=`<span>${new Date().toLocaleTimeString()} · ${m.sec} s${m.lost?` · ${m.lost} Pakete ersetzt`:""}</span><audio controls src="${m.url}"></audio>${m.clip?'<span style="font-size:12px">(Pegel abgesenkt gegen Clipping)</span>':''}`;
+      document.getElementById("recs").prepend(d);st.textContent="Siri-Taste halten und sprechen";}
+    return;}
+  if(m.type==="touch"){const t=document.getElementById("touch");t.classList.add("on");clearTimeout(window.tt);window.tt=setTimeout(()=>t.classList.remove("on"),150);
+    document.getElementById("touchhex").textContent="Touch: "+m.hex;return;}
+  if(m.type==="buttons"){
+    for(const k in NAMES)document.getElementById(k)?.classList.toggle("on",m.pressed.includes(k));
+    document.getElementById("siribadge").classList.toggle("on",m.pressed.includes("siri"));
+    const txt=m.pressed.map(k=>NAMES[k]).join(" + ");
+    document.getElementById("now").textContent=txt||"–";
+    line(`[${m.bus}] ${txt||"losgelassen"}   (${m.hex})`,"btn");
+  } else if(m.bus!=="usb") line(`[${m.bus}] id=0x${m.id.toString(16)} len=${m.len}  ${m.hex}`);
+};
+es.onerror=()=>document.getElementById("status").textContent="Server getrennt – verbinde neu …";
+</script></body></html>
