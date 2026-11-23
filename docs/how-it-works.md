@@ -24,8 +24,10 @@ device. After the remote goes away it looks for two minutes, then sleeps so the 
 sleep too; *Search* in the plugin card (SIGUSR1) looks again. If the takeover keeps failing
 for 15 s, BlueZ is stuck and the adapter is power-cycled.
 
-`bin/fast-link` sets a 15–30 ms LE connection interval in `/etc/bluetooth/main.conf`
-(Apple accepts no shorter one); touch reports then arrive every 30 ms instead of 45 ms.
+`bin/fast-link` sets a 15 ms LE connection interval in `/etc/bluetooth/main.conf` (Apple
+allows no shorter one). The remote sends one report per connection event; voice needs 50 a
+second (20 ms Opus frames), so at 30 ms it falls behind while you speak (3.9 s of speech took
+5.1 s to arrive) and at 15 ms it keeps up. Touch reports also arrive sooner.
 
 ## Touch
 

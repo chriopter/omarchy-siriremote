@@ -637,13 +637,15 @@ class Voice:
         if not self.tx:
             self.tx = True
             publish(listening=True)
-            self.tx_t0, self.tx_n, self.tx_gap = now, 0, 0.0
+            self.tx_t0, self.tx_n, self.tx_gap, self.tx_samples = now, 0, 0.0, 0
             if DEBUG:
                 print(f"voice: first packet {1000 * (now - self.siri_t0):.0f} ms after Siri down", flush=True)
         else:
             self.tx_gap = max(self.tx_gap, now - self.last)
         self.tx_n += 1
-        pcm.extend(self._decode(pkt))
+        dec = self._decode(pkt)
+        self.tx_samples += len(dec)
+        pcm.extend(dec)
         self.last = time.time()
         if MIC:
             MIC.push(pcm)
@@ -658,7 +660,8 @@ class Voice:
                 publish(listening=False)
                 if DEBUG:
                     span = self.last - self.tx_t0
-                    print(f"voice: {self.tx_n} packets = {self.tx_n * 20} ms audio in {1000 * span:.0f} ms, "
+                    after = f", last packet {1000 * (self.last - self.siri_up):.0f} ms after release" if self.siri_up else ""
+                    print(f"voice: {self.tx_n} packets = {1000 * self.tx_samples // self.RATE} ms audio in {1000 * span:.0f} ms{after}, "
                           f"max gap {1000 * self.tx_gap:.0f} ms, {getattr(self, 'lost', 0)} lost, "
                           f"mic queue max {MIC.qmax * 20 // MIC.FRAME if MIC else 0} ms", flush=True)
                     if MIC: MIC.qmax = 0
@@ -726,7 +729,7 @@ class Mic:
             raise RuntimeError("no PipeWire/PulseAudio server")
         self.q, self.lock = bytearray(), threading.Lock()
         self.active, self.released, self.prev_source, self.prev_x = False, False, None, 0.0
-        self.qmax = 0
+        self.qmax, self.mlock = 0, threading.Lock()
 
     def _unload_all(self):
         for line in subprocess.run(["pactl", "list", "short", "modules"], capture_output=True, text=True).stdout.splitlines():
@@ -808,9 +811,12 @@ class Mic:
         self.prev_source = out if out and out != self.NAME else self.prev_source
         with self.lock:
             self.q.clear()
-        if not self._load():
-            return
-        self.active, self.released = True, False
+        with self.mlock:
+            # the previous dictation may still be winding down: keep its source instead of
+            # loading a second one (its _finish then leaves it alone)
+            if not self.module and not self._load():
+                return
+            self.active, self.released, self.finishing = True, False, False
         self._run("pactl", "set-default-source", self.NAME)
         self._run("voxtype", "record", "start")
         threading.Thread(target=self._grab_stream, daemon=True).start()
@@ -851,9 +857,12 @@ class Mic:
         self._run("voxtype", "record", how)
         self.active = self.finishing = False
         time.sleep(0.5)
-        if self.prev_source:
-            self._run("pactl", "set-default-source", self.prev_source)
-        self._unload_all()
+        with self.mlock:
+            if self.active:                           # a new dictation took the source over
+                return
+            if self.prev_source:
+                self._run("pactl", "set-default-source", self.prev_source)
+            self._unload_all()
 
 
 MIC = None
