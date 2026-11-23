@@ -31,20 +31,26 @@ def main():
     print("Remote close to the laptop, hold BACK + VOLUME UP for a few seconds …", flush=True)
     ag = agent()
     mon = subprocess.Popen(["stdbuf", "-oL", "btmon"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
-    addr = rssi = None
-    tried = {}
+    addr = found = None
+    tried, said = {}, 0
     try:
         for raw in mon.stdout:
             line = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+            # btmon prints a report's address, then its data, then its RSSI: judge the
+            # signal of the report that carried the remote's advert, at its RSSI line.
             if m := re.search(r"Address: (([0-9A-F]{2}:){5}[0-9A-F]{2})", line):
-                addr = m.group(1); continue
-            if r := re.search(r"RSSI: (-\d+) dBm", line):
-                rssi = int(r.group(1)); continue
-            if not (addr and SIG in line) or time.time() < tried.get(addr, 0):
+                addr, found = m.group(1), None; continue
+            if addr and SIG in line:
+                found = addr; continue
+            r = re.search(r"RSSI: (-\d+) dBm", line)
+            if not (r and found) or time.time() < tried.get(found, 0):
+                continue
+            rssi, addr, found = int(r.group(1)), found, None
+            if rssi < -72:
+                if time.time() - said > 1:       # every advert counts; say it once a second
+                    print(f"Remote seen ({rssi} dBm), bring it closer", flush=True); said = time.time()
                 continue
             tried[addr] = time.time() + 10
-            if rssi is not None and rssi < -60:
-                print(f"Remote seen ({rssi} dBm), bring it closer", flush=True); continue
             print(f"Remote found: {addr} ({rssi} dBm), pairing …", flush=True)
             try:
                 p = subprocess.run(["btmgmt", "pair", "-c", "3", "-t", "2", addr], input="yes\n" * 5,

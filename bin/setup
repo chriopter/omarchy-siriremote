@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Install: udev access, pairing, systemd user service. Run as your desktop user;
-# only device rules and pairing use sudo.
+# Install the driver: udev access, pairing, systemd user service. Run as your desktop
+# user; only device rules and pairing use sudo. The bar plugin is installed separately.
 set -euo pipefail
 
-project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 if (( EUID == 0 )); then
     echo 'Run bin/setup as your desktop user, not as root.' >&2
     exit 1
@@ -37,7 +37,7 @@ while read -r kind mac rest; do
         paired=true
         break
     fi
-done <<< "$(bluetoothctl devices Paired)"
+done <<< "$(bluetoothctl devices Paired | sed 's/\x1b\[[0-9;]*m//g')"
 if [[ "$paired" == false ]]; then
     sudo "$(command -v python3)" "$project_dir/src/pair.py"
 fi
@@ -62,7 +62,6 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-WorkingDirectory=$(unit_quote "$project_dir")
 ExecStart=$(unit_quote "$(command -v python3)") $(unit_quote "$exec_path")
 Restart=on-failure
 RestartSec=3
@@ -73,5 +72,4 @@ UNIT
 systemctl --user daemon-reload
 systemctl --user enable siri-remote.service
 systemctl --user restart siri-remote.service
-printf '%s\n' 'Running: siri-remote.service · page: http://127.0.0.1:8315' \
-    'Logs: journalctl --user -u siri-remote.service -f'
+printf '%s\n' 'Running: siri-remote.service' 'Logs: journalctl --user -u siri-remote.service -f'

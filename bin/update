@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pull the latest version and restart the service.
+# Pull the latest version and restart the driver; the plugin reloads by itself.
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 git pull --ff-only

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Ask for a 15-30 ms Bluetooth LE connection interval instead of the kernel's 30-50 ms
+# default (the remote then gets 45 ms): touch reports arrive sooner and in smaller bursts.
+# Apple's accessory rules want a minimum of at least 15 ms and a maximum at least 15 ms above
+# it; the remote refuses to connect at all with 7.5-15 ms.
+#
+# BlueZ's per-device [ConnectionParameters] did not reach the connect command, so this sets
+# the default for all LE devices in /etc/bluetooth/main.conf. Restarts bluetooth.
+# `bin/fast-link off` puts the default back.
+set -euo pipefail
+off=false
+[[ ${1:-} == off ]] && off=true
+conf=/etc/bluetooth/main.conf
+
+# Units of 1.25 ms: 12 = 15 ms, 24 = 30 ms. Only the two interval lines under [LE] change;
+# with `off` they go back to commented out.
+sudo awk -v off="$off" '
+  /^\[/ { le = ($0 == "[LE]") }
+  le && /^#?MinConnectionInterval=/ { print (off == "true" ? "#MinConnectionInterval=" : "MinConnectionInterval=12"); next }
+  le && /^#?MaxConnectionInterval=/ { print (off == "true" ? "#MaxConnectionInterval=" : "MaxConnectionInterval=24"); next }
+  { print }
+' "$conf" | sudo tee "$conf.new" >/dev/null
+sudo chmod --reference="$conf" "$conf.new"
+sudo mv "$conf.new" "$conf"
+
+# An earlier version stored the interval per device; that had no effect, so remove it.
+adapter=$(bluetoothctl show | sed 's/\x1b\[[0-9;]*m//g' | awk '/^Controller/ { print $2; exit }')
+for info in $(sudo sh -c "ls /var/lib/bluetooth/$adapter/*/info 2>/dev/null"); do
+    if sudo grep -q '^\[ConnectionParameters\]' "$info"; then
+        sudo awk '/^\[/ { skip = ($0 == "[ConnectionParameters]") } !skip' "$info" | sudo tee "$info.new" >/dev/null
+        sudo chmod 600 "$info.new"; sudo mv "$info.new" "$info"
+    fi
+done
+
+sudo systemctl restart bluetooth
+if $off; then echo "LE connection interval back to the default"; else echo "LE connection interval set to 15-30 ms"; fi
+echo "The remote reconnects at the next button press."

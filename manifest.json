@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "chriopter.siriremote",
+  "name": "Siri Remote",
+  "version": "1.0.0",
+  "author": "chriopter",
+  "license": "MIT",
+  "homepage": "https://github.com/chriopter/omarchy-siriremote",
+  "description": "The Apple Siri Remote (3rd gen) in the Omarchy bar: connection, battery, dictation and touch speed. The driver itself is set up with bin/setup.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "plugin/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Siri Remote",
+    "description": "Connection, battery and touch speed of the Siri Remote",
+    "category": "Hardware",
+    "aliases": [
+      "siri",
+      "remote",
+      "apple tv remote"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "tray"
+  }
+}

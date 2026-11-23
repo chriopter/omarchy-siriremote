@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the driver in the foreground (stops the service meanwhile); page: http://127.0.0.1:8315
+# Run the driver in the foreground (stops the service meanwhile).
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 systemctl --user stop siri-remote.service 2>/dev/null || true
