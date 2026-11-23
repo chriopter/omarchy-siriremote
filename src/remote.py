@@ -593,8 +593,9 @@ MOUSE = None
 # --- Opus voice capture and Voxtype dictation ---
 
 class Voice:
-    """Decode [4B header][1B len][Opus CELT-WB 20 ms] at 16 kHz, conceal gaps and feed the mic."""
-    RATE = 16000; FRAME = 320   # native rate of the remote's CELT-WB stream: no resampling
+    """Decode [4B header][1B len][Opus CELT-WB 20 ms] at 48 kHz, conceal gaps and feed the mic."""
+    # Decoded at 48 kHz, Opus's highest rate (it resamples internally); the mic doubles it, see Mic.
+    RATE = 48000; FRAME = 960
 
     def __init__(self):
         self.lib = ctypes.CDLL("libopus.so.0")
@@ -652,10 +653,6 @@ class Voice:
                     print(f"voice: {self.packets} packets, {getattr(self, 'lost', 0)} lost, "
                           f"mic active {bool(MIC and MIC.active)}", flush=True)
                     self.lost = 0
-            # after release the remote sends its buffered tail, with radio pauses of 100-200 ms
-            # in between: stop only once it has been quiet for tail_gap
-            if MIC and MIC.active and MIC.released and time.time() - self.last > MIC.tail_gap:
-                MIC.tx_ended()
             if not (self.packets and time.time() - self.last > 0.6):
                 continue
             frames, packets = self.frames, self.packets
@@ -706,7 +703,10 @@ class Mic:
     default source comes back and the source is removed again. Voxtype shows its own indicator,
     transcribes and pastes exactly as with the pedal."""
     NAME = "siri_remote_mic"
-    FRAME = 320 * 2                                    # 20 ms of s16le mono at 16 kHz
+    # PipeWire's pipe source buffers a fixed 8192 samples: 512 ms at the stream's native 16 kHz,
+    # 170 ms at 48 kHz, 85 ms at 96 kHz (measured end to end: 540, 190, 110 ms).
+    RATE = 96000
+    FRAME = RATE // 50 * 2                             # 20 ms of s16le mono
 
     def __init__(self):
         self.fifo = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "siri-remote-mic.fifo")
@@ -715,8 +715,7 @@ class Mic:
         if subprocess.run(["pactl", "info"], capture_output=True).returncode:
             raise RuntimeError("no PipeWire/PulseAudio server")
         self.q, self.lock = bytearray(), threading.Lock()
-        self.active, self.released, self.prev_source = False, False, None
-        self.tail_gap, self.tail_max = 0.15, 0.5
+        self.active, self.released, self.prev_source, self.prev_x = False, False, None, 0.0
 
     def _unload_all(self):
         for line in subprocess.run(["pactl", "list", "short", "modules"], capture_output=True, text=True).stdout.splitlines():
@@ -728,7 +727,7 @@ class Mic:
         if os.path.exists(self.fifo):
             os.unlink(self.fifo)
         r = subprocess.run(["pactl", "load-module", "module-pipe-source", f"source_name={self.NAME}",
-                            f"file={self.fifo}", "format=s16le", "rate=16000", "channels=1",
+                            f"file={self.fifo}", "format=s16le", f"rate={self.RATE}", "channels=1",
                             "source_properties=device.description=Siri-Remote-Mic"], capture_output=True, text=True)
         if r.returncode:
             print("remote mic unavailable:", r.stderr.strip(), flush=True)
@@ -744,32 +743,42 @@ class Mic:
         self._unload_all()
 
     def push(self, pcm):
-        if self.active:
-            data = b"".join(struct.pack("<h", int(max(-1.0, min(1.0, x)) * 32767)) for x in pcm)
+        if self.active and not self.released and pcm:
+            up, prev = [], self.prev_x                 # 48 -> 96 kHz: linear midpoints
+            for x in pcm:
+                up += ((prev + x) / 2, x); prev = x
+            self.prev_x = prev
+            data = struct.pack(f"<{len(up)}h", *(int(max(-1.0, min(1.0, x)) * 32767) for x in up))
             with self.lock:
                 self.q += data
 
     def _writer(self, module):
         """Feed the pipe in real time while this source exists: queued voice (bursts drained
-        quickly), else silence."""
+        quickly), else silence. PipeWire stops reading while nobody records; silence that would
+        then pile up in front of the voice is dropped instead, voice waits for the reader."""
         try:
             fd = os.open(self.fifo, os.O_WRONLY)
         except OSError:
             return
-        # A pipe holds 64 KB by default, two seconds at 16 kHz: silence written before Voxtype
-        # starts reading would sit in front of the voice and delay it by that much. Keep it to
-        # one page (~130 ms).
         try:
-            fcntl.fcntl(fd, 1031, 4096)                # F_SETPIPE_SZ
+            fcntl.fcntl(fd, 1031, 4096)                # F_SETPIPE_SZ: one page, ~40 ms
         except OSError:
             pass
+        os.set_blocking(fd, False)
         nxt = time.monotonic()
         try:
             while self.module == module:
                 with self.lock:
                     n = self.FRAME * (3 if len(self.q) > self.FRAME * 6 else 1)
                     chunk = bytes(self.q[:n]); del self.q[:n]
-                os.write(fd, chunk + b"\0" * (self.FRAME - len(chunk)) if len(chunk) < self.FRAME else chunk)
+                data = chunk + b"\0" * (self.FRAME - len(chunk)) if len(chunk) < self.FRAME else chunk
+                try:
+                    done = os.write(fd, data)
+                except BlockingIOError:
+                    done = 0
+                if done < len(chunk):                  # voice not taken yet: keep it, in order
+                    with self.lock:
+                        self.q[:0] = chunk[done:]
                 nxt += 0.02
                 time.sleep(max(0, nxt - time.monotonic()))
         except OSError:
@@ -811,17 +820,10 @@ class Mic:
             time.sleep(0.05)
 
     def release(self):
-        """Siri released: let the last words still in flight over the radio through, then stop:
-        once the remote has been quiet for tail_gap, or after tail_max at the latest (it keeps
-        sending noise for a while after release)."""
-        if not self.active:
-            return
-        self.released = True
-        threading.Timer(self.tail_max, self.tx_ended).start()   # flush_loop usually ends it sooner
-
-    def tx_ended(self):
-        if self.active and self.released and not getattr(self, "finishing", False):
-            self.finishing = True
+        """Siri released: stop like any push-to-talk key, once the voice already received has
+        gone through the pipe (~0.1 s). What the remote sends after release is not used."""
+        if self.active and not getattr(self, "finishing", False):
+            self.released = self.finishing = True
             threading.Thread(target=self._finish, args=("stop",), daemon=True).start()
 
     def cancel(self):
@@ -831,9 +833,9 @@ class Mic:
 
     def _finish(self, how):
         t = time.time()
-        while self.q and time.time() - t < 1.5:      # play the queued voice into the pipe first
+        while self.q and time.time() - t < 0.5:      # play the queued voice into the pipe first
             time.sleep(0.02)
-        time.sleep(0.12)                              # last buffered frames through the pipe
+        time.sleep(0.1)                               # through the pipe source's 85 ms buffer
         self._run("voxtype", "record", how)
         self.active = self.finishing = False
         time.sleep(0.5)
