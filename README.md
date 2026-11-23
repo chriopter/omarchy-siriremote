@@ -2,52 +2,59 @@
 
 ![Siri Remote buttons and what they do in Omarchy](preview.png)
 
-Use the Apple Siri Remote (3rd generation, USB-C) as a couch controller for [Omarchy](https://omarchy.org): touch surface as mouse, Siri button for [Voxtype](https://github.com/peteonrails/voxtype) dictation through the remote's own microphone, media keys, and [herdr](https://herdr.dev) / Hyprland navigation. A bar plugin shows connection, battery and dictation, and tunes the touch surface.
-
-## Buttons
-
-| Control | Action |
-| --- | --- |
-| Touch surface / ring centre | Mouse / left click |
-| Ring ← → / ↑ ↓ | Arrow keys; in herdr: the neighbouring pane, at the edge the previous/next tab (← →) or workspace (↑ ↓) |
-| TV | Enter |
-| Power short / held | Next Omarchy workspace / settings menu in the middle of the screen (display scaling, speaker, voice input; ring ↑ ↓ choose, ← → change, Back closes) |
-| Back | Escape |
-| Siri hold | Voxtype dictation with the remote's microphone (it exists only while dictating) |
-| Play/Pause 1× / 2× | Play/pause / next track and play (via MPRIS, the player that is playing) |
-| Volume + − / Mute | Media keys |
+The Apple Siri Remote (3rd generation, USB-C) as a couch controller for [Omarchy](https://omarchy.org): the touch surface moves the mouse, the Siri button dictates through the remote's own microphone with [Voxtype](https://github.com/peteonrails/voxtype), and the ring navigates [herdr](https://herdr.dev). A bar widget shows connection and battery and tunes the touch surface.
 
 ## Install
-
-Two parts: the bar plugin, and the driver it shows.
 
 ```sh
 omarchy plugin add https://github.com/chriopter/omarchy-siriremote --enable
 ~/.config/omarchy/plugins/chriopter.siriremote/bin/setup
 ```
 
-The plugin card also offers *Set up driver* when the driver is missing. `bin/setup` installs udev rules, pairs the remote (hold Back + Volume Up) and starts the systemd user service `siri-remote.service`. Optional: `bin/fast-link` asks for a 15–30 ms Bluetooth LE connection interval (system-wide, restarts bluetooth), which makes the touch surface noticeably smoother.
+The first line adds the bar widget, the second the driver: udev rules, pairing (hold **Back + Volume Up** when asked) and the systemd user service `siri-remote.service`. The widget's *Set up* button runs the same script.
+
+Optional, for smoother touch: `bin/fast-link` sets a 15–30 ms Bluetooth LE connection interval for all devices (edits `/etc/bluetooth/main.conf`, restarts bluetooth).
+
+Needs BlueZ, PipeWire, libopus and Python 3; Voxtype, herdr and Hyprland as shipped with Omarchy.
+
+## Buttons
+
+| Button | Action |
+| --- | --- |
+| Touch surface, press | Mouse, left click |
+| Ring ← → ↑ ↓ | Arrow keys; in herdr the next pane, at the edge the next tab (← →) or workspace (↑ ↓) |
+| TV | Enter |
+| Back | Escape |
+| Power | Next workspace; held: settings menu |
+| Siri, held | Dictation with Voxtype |
+| Play/Pause | Pause or play; twice: next track |
+| Volume, Mute | Media keys |
+
+The settings menu opens in the middle of the screen: display scaling, speaker and voice input. ↑ ↓ choose, ← → change, Back closes.
+
+## Bar widget
+
+Click the widget for its card: connection, battery, radio interval, and sliders for speed, acceleration, fine control, thumb-roll filter, smoothing and landing. *Search* looks for the remote again after the driver stopped searching (it does after two minutes, so the remote can sleep). *Restart*, *Logs* and *Reset* are always there.
 
 ## Remove
 
 ```sh
-~/.config/omarchy/plugins/chriopter.siriremote/bin/remove   # add --unpair to forget the remote too
+~/.config/omarchy/plugins/chriopter.siriremote/bin/remove   # --unpair also forgets the remote
 omarchy plugin remove chriopter.siriremote
 ```
 
-`bin/remove` stops the driver and deletes its service, udev rules and settings; it puts the Bluetooth LE connection interval back if `bin/fast-link` changed it.
+`bin/remove` stops the driver, deletes its service, udev rules and settings, and undoes `bin/fast-link`.
 
 ## Development
 
 ```sh
-ln -s "$PWD" ~/.config/omarchy/plugins/chriopter.siriremote && omarchy plugin enable chriopter.siriremote
-bin/setup   # driver: udev rules, pairing, systemd user service
-bin/dev     # run the driver in the foreground instead of the service
-bin/update  # pull and restart the driver
+ln -s "$PWD" ~/.config/omarchy/plugins/chriopter.siriremote
+omarchy plugin enable chriopter.siriremote
+bin/setup    # driver
+bin/dev      # driver in the foreground instead of the service
+bin/update   # pull and restart the driver
 ```
 
-The shell does not watch files behind a symlinked plugin folder: after changing `plugin/`, run `omarchy restart shell`.
+Behind a symlinked plugin folder the shell does not reload on its own: run `omarchy restart shell` after changing `plugin/`. How pairing, touch, voice and the menu work: [docs/how-it-works.md](docs/how-it-works.md).
 
-Needs BlueZ, PipeWire (`pactl`), libopus, Python 3.14, and Voxtype, herdr and Hyprland as shipped with Omarchy. Pairing, input, touch, voice and plugin details: [docs/how-it-works.md](docs/how-it-works.md).
-
-MIT licensed, see [LICENSE](LICENSE). Not affiliated with Apple. Siri and Apple TV are trademarks of Apple Inc.
+MIT licensed. Not affiliated with Apple; Siri and Apple TV are trademarks of Apple Inc.
