@@ -24,7 +24,16 @@ omarchy plugin add https://github.com/chriopter/omarchy-siriremote --enable
 ~/.config/omarchy/plugins/chriopter.siriremote/bin/setup
 ```
 
-The plugin card also offers *Set up driver* when the driver is missing. `bin/setup` installs udev rules, pairs the remote (hold Back + Volume Up) and starts the systemd user service `siri-remote.service`.
+The plugin card also offers *Set up driver* when the driver is missing. `bin/setup` installs udev rules, pairs the remote (hold Back + Volume Up) and starts the systemd user service `siri-remote.service`. Optional: `bin/fast-link` asks for a 15–30 ms Bluetooth LE connection interval (system-wide, restarts bluetooth), which makes the touch surface noticeably smoother.
+
+## Remove
+
+```sh
+~/.config/omarchy/plugins/chriopter.siriremote/bin/remove   # add --unpair to forget the remote too
+omarchy plugin remove chriopter.siriremote
+```
+
+`bin/remove` stops the driver and deletes its service, udev rules and settings; it puts the Bluetooth LE connection interval back if `bin/fast-link` changed it.
 
 ## Development
 
@@ -39,4 +48,4 @@ The shell does not watch files behind a symlinked plugin folder: after changing 
 
 Needs BlueZ, PipeWire (`pactl`), libopus, Python 3.14, and Voxtype, herdr and Hyprland as shipped with Omarchy. Pairing, input, touch, voice and plugin details: [docs/how-it-works.md](docs/how-it-works.md).
 
-Not affiliated with Apple. Siri and Apple TV are trademarks of Apple Inc.
+MIT licensed, see [LICENSE](LICENSE). Not affiliated with Apple. Siri and Apple TV are trademarks of Apple Inc.

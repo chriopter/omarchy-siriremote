@@ -56,7 +56,7 @@ While Siri is held the remote streams `[4-byte header][length][Opus CELT-WB 20 m
 (16-bit frame counter in header bytes 2–3). The service decodes it with libopus at 48 kHz and
 conceals short gaps. On Siri down it loads a PipeWire pipe source "Siri-Remote-Mic", makes it
 the default input and runs `voxtype record start`; on release it lets the voice already
-received through the pipe (~0.1 s), runs `voxtype record stop`, restores the input and unloads the source. PipeWire's
+received through the pipe (0.3 s), runs `voxtype record stop`, restores the input and unloads the source. PipeWire's
 pipe source buffers a fixed 8192 samples, 512 ms at the stream's native 16 kHz; the source runs
 at 96 kHz (Opus decodes at 48 kHz, doubled), which keeps it at 85 ms. The pipe is kept at 4 KiB, and silence is dropped while nobody records, so
 speech is not held back behind buffered audio. Dictating without the

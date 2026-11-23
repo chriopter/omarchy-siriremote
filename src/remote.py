@@ -821,7 +821,7 @@ class Mic:
 
     def release(self):
         """Siri released: stop like any push-to-talk key, once the voice already received has
-        gone through the pipe (~0.1 s). What the remote sends after release is not used."""
+        gone through the pipe (0.3 s). What the remote sends after release is not used."""
         if self.active and not getattr(self, "finishing", False):
             self.released = self.finishing = True
             threading.Thread(target=self._finish, args=("stop",), daemon=True).start()
@@ -835,7 +835,7 @@ class Mic:
         t = time.time()
         while self.q and time.time() - t < 0.5:      # play the queued voice into the pipe first
             time.sleep(0.02)
-        time.sleep(0.1)                               # through the pipe source's 85 ms buffer
+        time.sleep(0.3)                               # pipe source's 85 ms buffer, plus the last word
         self._run("voxtype", "record", how)
         self.active = self.finishing = False
         time.sleep(0.5)

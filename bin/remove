@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Undo bin/setup: stop and remove the driver service, the udev and module rules and the
+# stored touch settings. The pairing stays unless `--unpair` is given. Remove the bar plugin
+# afterwards with `omarchy plugin remove chriopter.siriremote`.
+set -euo pipefail
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+
+systemctl --user disable --now siri-remote.service 2>/dev/null || true
+rm -f -- "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/siri-remote.service"
+systemctl --user daemon-reload
+rm -rf -- "${SIRI_REMOTE_DATA:-$HOME/.local/share/omarchy-siriremote}"
+
+sudo rm -f /etc/udev/rules.d/70-siri-remote.rules /etc/modules-load.d/siri-remote.conf
+sudo udevadm control --reload-rules
+# bin/fast-link changed the LE connection interval for all devices: put the default back.
+if grep -q '^MinConnectionInterval=12$' /etc/bluetooth/main.conf 2>/dev/null; then
+    "$project_dir/bin/fast-link" off
+fi
+
+if [[ ${1:-} == --unpair ]]; then
+    while read -r kind mac rest; do
+        [[ $kind == Device && $(bluetoothctl info "$mac") == *p0315* ]] && bluetoothctl remove "$mac"
+    done <<< "$(bluetoothctl devices Paired | sed 's/\x1b\[[0-9;]*m//g')"
+fi
+echo "Driver removed. Remove the bar plugin with: omarchy plugin remove chriopter.siriremote"
