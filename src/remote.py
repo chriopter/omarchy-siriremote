@@ -633,9 +633,16 @@ class Voice:
                     pcm.extend(self._decode(None))
         self.prev_seq = seq
         self.packets += 1
+        now = time.time()
         if not self.tx:
             self.tx = True
             publish(listening=True)
+            self.tx_t0, self.tx_n, self.tx_gap = now, 0, 0.0
+            if DEBUG:
+                print(f"voice: first packet {1000 * (now - self.siri_t0):.0f} ms after Siri down", flush=True)
+        else:
+            self.tx_gap = max(self.tx_gap, now - self.last)
+        self.tx_n += 1
         pcm.extend(self._decode(pkt))
         self.last = time.time()
         if MIC:
@@ -650,8 +657,11 @@ class Voice:
                 self.tx = False
                 publish(listening=False)
                 if DEBUG:
-                    print(f"voice: {self.packets} packets, {getattr(self, 'lost', 0)} lost, "
-                          f"mic active {bool(MIC and MIC.active)}", flush=True)
+                    span = self.last - self.tx_t0
+                    print(f"voice: {self.tx_n} packets = {self.tx_n * 20} ms audio in {1000 * span:.0f} ms, "
+                          f"max gap {1000 * self.tx_gap:.0f} ms, {getattr(self, 'lost', 0)} lost, "
+                          f"mic queue max {MIC.qmax * 20 // MIC.FRAME if MIC else 0} ms", flush=True)
+                    if MIC: MIC.qmax = 0
                     self.lost = 0
             if not (self.packets and time.time() - self.last > 0.6):
                 continue
@@ -716,6 +726,7 @@ class Mic:
             raise RuntimeError("no PipeWire/PulseAudio server")
         self.q, self.lock = bytearray(), threading.Lock()
         self.active, self.released, self.prev_source, self.prev_x = False, False, None, 0.0
+        self.qmax = 0
 
     def _unload_all(self):
         for line in subprocess.run(["pactl", "list", "short", "modules"], capture_output=True, text=True).stdout.splitlines():
@@ -751,6 +762,7 @@ class Mic:
             data = struct.pack(f"<{len(up)}h", *(int(max(-1.0, min(1.0, x)) * 32767) for x in up))
             with self.lock:
                 self.q += data
+                self.qmax = max(self.qmax, len(self.q))
 
     def _writer(self, module):
         """Feed the pipe in real time while this source exists: queued voice (bursts drained
@@ -870,7 +882,7 @@ def bt_input_loop():
     H_BTN, H_TOUCH, H_BATT, H_PWR = 0x3a, 0x3e, 0x2f, 0x32
     global BT_MAC
     scanner = None
-    failed_t = 0.0                         # when the last takeover failed
+    failed = 0                             # takeovers failed in a row
     while True:
         s = None
         try:
@@ -895,20 +907,26 @@ def bt_input_loop():
                     search_t = time.time()
                     publish(searching=True)
                 # a running scan process is not enough: it outlives a bluetooth restart, discovery not
-                if not scanner or scanner.poll() is not None or "Discovering: yes" not in btctl("show", t=3):
+                show = btctl("show", t=3)
+                if "Powered: no" in show:
+                    # left off, e.g. when the driver was stopped in the middle of the power cycle below
+                    print("bluetooth adapter is off, switching it on", flush=True)
+                    btctl("power", "on", t=5)
+                if not scanner or scanner.poll() is not None or "Discovering: yes" not in show:
                     if scanner and scanner.poll() is None:
                         scanner.kill()
                     scanner = subprocess.Popen(["bluetoothctl", "--timeout", "86400", "scan", "on"],
                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 subprocess.run(["bluetoothctl", "--timeout", "10", "connect", BT_MAC], capture_output=True, timeout=15)
-                # After a failed takeover (typically right after bluetooth or the adapter
-                # restarted) BlueZ can keep a dead connection attempt that blocks every new one:
-                # the remote never comes back, buttons or not. Only switching the adapter off and
-                # on clears it, so do that when the remote is still away 15 s after such a failure.
-                if failed_t and time.time() - failed_t > 15:
+                # BlueZ can get stuck so that every takeover fails, buttons or not; only switching
+                # the adapter off and on clears that. It also drops every other Bluetooth device
+                # (keyboard, headphones), so only after three failed takeovers in a row. A single
+                # failure is normal (the first one after a driver restart always fails, and the
+                # remote then sleeps until a button press): that is no reason.
+                if failed >= 3:
                     print("bluetooth stuck, switching the adapter off and on", flush=True)
                     btctl("power", "off", t=5); time.sleep(2); btctl("power", "on", t=5)
-                    failed_t = 0.0
+                    failed = 0
             # hand the woken link from bluez to our ATT socket; the remote re-advertises right after
             # the disconnect, so retry the direct connect quickly instead of waiting long
             subprocess.run(["bluetoothctl", "disconnect", BT_MAC], capture_output=True, timeout=5)
@@ -919,12 +937,14 @@ def bt_input_loop():
                 s.settimeout(2.5)
                 try:
                     s.connect((BT_MAC, 0, 4, socket.BDADDR_LE_PUBLIC)); break
-                except OSError:
+                except OSError as e:
+                    if DEBUG:
+                        print(f"takeover attempt: {e!r}, bluez {'connected' if 'Connected: yes' in btctl('info', BT_MAC, t=2) else 'not connected'}", flush=True)
                     s.close(); s = None; time.sleep(0.1)
             if s is None:
-                failed_t = failed_t or time.time()
+                failed += 1
                 raise TimeoutError("takeover failed")
-            failed_t = 0.0
+            failed = 0
             # Discovery is only for finding the remote: left running it scans continuously and
             # takes airtime from the link (touch gaps, lost voice), so stop it once ours.
             if scanner and scanner.poll() is None:
