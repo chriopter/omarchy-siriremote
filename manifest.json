@@ -23,6 +23,6 @@
       "apple tv remote"
     ],
     "allowMultiple": false,
-    "defaultSection": "tray"
+    "defaultSection": "right"
   }
 }
