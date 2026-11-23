@@ -1,5 +1,7 @@
 # omarchy-siriremote
 
+![Siri Remote buttons and what they do in Omarchy](preview.png)
+
 Use the Apple Siri Remote (3rd generation, USB-C) as a couch controller for [Omarchy](https://omarchy.org): touch surface as mouse, Siri button for [Voxtype](https://github.com/peteonrails/voxtype) dictation through the remote's own microphone, media keys, and [herdr](https://herdr.dev) / Hyprland navigation. A bar plugin shows connection, battery and dictation, and tunes the touch surface.
 
 ## Buttons
