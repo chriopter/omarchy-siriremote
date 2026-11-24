@@ -77,4 +77,10 @@ UNIT
 systemctl --user daemon-reload
 systemctl --user enable siri-remote.service
 systemctl --user restart siri-remote.service
+# Live dictation needs a 15 ms LE connection interval (see bin/fast-link). It applies to all
+# Bluetooth LE devices, so ask instead of just doing it.
+if ! grep -q '^MaxConnectionInterval=12$' /etc/bluetooth/main.conf 2>/dev/null && [[ -t 0 ]]; then
+    read -rp 'Set the Bluetooth LE connection interval to 15 ms? Dictation lags 1-2 s without it (restarts bluetooth) [Y/n] ' answer
+    [[ ${answer,,} == n* ]] || "$project_dir/bin/fast-link"
+fi
 printf '%s\n' 'Running: siri-remote.service' 'Logs: journalctl --user -u siri-remote.service -f'

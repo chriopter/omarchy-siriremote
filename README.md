@@ -13,7 +13,7 @@ omarchy plugin add https://github.com/chriopter/omarchy-siriremote --enable
 
 The first line adds the bar widget, the second the driver: udev rules, pairing (hold **Back + Volume Up** when asked) and the systemd user service `siri-remote.service`. The widget's *Set up* button runs the same script.
 
-Recommended: `bin/fast-link` sets a 15 ms Bluetooth LE connection interval for all devices (edits `/etc/bluetooth/main.conf`, restarts bluetooth). At the default 30–50 ms the remote cannot send its voice as fast as you speak, so dictation falls behind by a second or more, and touch is less smooth.
+At the end `bin/setup` offers to set a 15 ms Bluetooth LE connection interval for all devices with `bin/fast-link` (edits `/etc/bluetooth/main.conf`, restarts bluetooth). At the default 30–50 ms the remote cannot send its voice as fast as you speak, so dictation falls behind by a second or more, and touch is less smooth.
 
 Needs BlueZ, PipeWire, libopus and Python 3; Voxtype, herdr and Hyprland as shipped with Omarchy. First-time pairing also needs `python-dbus` and `python-gobject`.
 
