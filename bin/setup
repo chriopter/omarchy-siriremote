@@ -12,6 +12,20 @@ for cmd in python3 bluetoothctl btmon btmgmt stdbuf sudo systemctl udevadm modpr
     command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
 
+# Match the same paired-device modalias as remote.py; do not pair again on reinstall.
+paired=false
+while read -r kind mac rest; do
+    [[ "$kind" == Device ]] || continue
+    if [[ $(bluetoothctl info "$mac") == *p0315* ]]; then
+        paired=true
+        break
+    fi
+done <<< "$(bluetoothctl devices Paired | sed 's/\x1b\[[0-9;]*m//g')"
+if [[ "$paired" == false ]] && ! python3 -c 'import dbus; from gi.repository import Gio, GLib'; then
+    echo 'Pairing requires python-dbus and python-gobject (install with pacman).' >&2
+    exit 1
+fi
+
 # A 70-* rule runs before systemd's seat-late rule applies uaccess ACLs.
 sudo tee /etc/udev/rules.d/70-siri-remote.rules >/dev/null <<'RULES'
 # Apple Siri Remote gen 3: USB 05AC:0315, Bluetooth 004C:0315
@@ -29,15 +43,6 @@ sudo udevadm trigger --subsystem-match=hidraw
 sudo udevadm trigger --subsystem-match=misc --sysname-match=uinput
 sudo udevadm settle
 
-# Match the same paired-device modalias as remote.py; do not pair again on reinstall.
-paired=false
-while read -r kind mac rest; do
-    [[ "$kind" == Device ]] || continue
-    if [[ $(bluetoothctl info "$mac") == *p0315* ]]; then
-        paired=true
-        break
-    fi
-done <<< "$(bluetoothctl devices Paired | sed 's/\x1b\[[0-9;]*m//g')"
 if [[ "$paired" == false ]]; then
     sudo "$(command -v python3)" "$project_dir/src/pair.py"
 fi

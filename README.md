@@ -15,7 +15,7 @@ The first line adds the bar widget, the second the driver: udev rules, pairing (
 
 Recommended: `bin/fast-link` sets a 15 ms Bluetooth LE connection interval for all devices (edits `/etc/bluetooth/main.conf`, restarts bluetooth). At the default 30–50 ms the remote cannot send its voice as fast as you speak, so dictation falls behind by a second or more, and touch is less smooth.
 
-Needs BlueZ, PipeWire, libopus and Python 3; Voxtype, herdr and Hyprland as shipped with Omarchy.
+Needs BlueZ, PipeWire, libopus and Python 3; Voxtype, herdr and Hyprland as shipped with Omarchy. First-time pairing also needs `python-dbus` and `python-gobject`.
 
 ## Buttons
 

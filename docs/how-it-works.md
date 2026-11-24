@@ -2,11 +2,13 @@
 
 ## Pairing
 
-The remote's pairing advert has no LE discoverable flags, so BlueZ drops it
-and `bluetoothctl scan` never lists the remote. `src/pair.py` watches raw adverts with `btmon`
-for Apple manufacturer data `4c00 070d 0215` (PnP 0x0315), pairs with `btmgmt`
-(LE random, NoInputNoOutput) and confirms Just Works through a bluetoothctl agent, so
-bluetoothd stores the bond like any other device.
+The remote's pairing advert has no LE discoverable flags, so BlueZ can drop it.
+`src/pair.py` watches raw adverts with `btmon` for Apple manufacturer data
+`4c00 070d 0215` (PnP 0x0315), then pairs with `btmgmt` (LE random, NoInputNoOutput)
+on the lowest-numbered powered BlueZ controller. The temporary D-Bus agent accepts
+at most one pairing confirmation from BlueZ for that controller and the exact
+selected device, only during that pairing attempt. It never authorizes services.
+The advert and signal strength select the candidate; Just Works does not authenticate it.
 
 ## Input
 
