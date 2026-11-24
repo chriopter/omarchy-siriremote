@@ -892,6 +892,7 @@ def bt_input_loop():
     global BT_MAC
     scanner = None
     failed = 0                             # takeovers failed in a row
+    first = True
     while True:
         s = None
         try:
@@ -903,6 +904,17 @@ def bt_input_loop():
             # Search only for SEARCH_S after the remote went away (or the driver started): a remote
             # that is out of the room must not keep the radio busy. After that the driver sleeps
             # until the card's "Search" (SIGUSR1) wakes it.
+            if first:
+                # Right after a driver restart the previous instance's link is still up for ~2 s
+                # while the kernel tears it down: taken for a fresh BlueZ connection, the takeover
+                # below would run into that dying link and time out. Drop it and start clean.
+                first = False
+                if "Connected: yes" in btctl("info", BT_MAC, t=3):
+                    subprocess.run(["bluetoothctl", "disconnect", BT_MAC], capture_output=True, timeout=5)
+                    for _ in range(30):
+                        if "Connected: yes" not in btctl("info", BT_MAC, t=2):
+                            break
+                        time.sleep(0.1)
             search_t = time.time()
             publish(searching=True)
             while "Connected: yes" not in btctl("info", BT_MAC, t=3):
@@ -929,27 +941,25 @@ def bt_input_loop():
                 subprocess.run(["bluetoothctl", "--timeout", "10", "connect", BT_MAC], capture_output=True, timeout=15)
                 # BlueZ can get stuck so that every takeover fails, buttons or not; only switching
                 # the adapter off and on clears that. It also drops every other Bluetooth device
-                # (keyboard, headphones), so only after three failed takeovers in a row. A single
-                # failure is normal (the first one after a driver restart always fails, and the
-                # remote then sleeps until a button press): that is no reason.
+                # (keyboard, headphones), so only after three failed takeovers in a row.
                 if failed >= 3:
                     print("bluetooth stuck, switching the adapter off and on", flush=True)
                     btctl("power", "off", t=5); time.sleep(2); btctl("power", "on", t=5)
                     failed = 0
-            # hand the woken link from bluez to our ATT socket; the remote re-advertises right after
-            # the disconnect, so retry the direct connect quickly instead of waiting long
+            # Hand the woken link from BlueZ to our ATT socket: the remote advertises again after
+            # the disconnect. One patient connect: cancelling and restarting it every few seconds
+            # missed that advertising now and then.
             subprocess.run(["bluetoothctl", "disconnect", BT_MAC], capture_output=True, timeout=5)
-            for _ in range(6):
-                s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
-                s.setsockopt(socket.SOL_BLUETOOTH, socket.BT_SECURITY, struct.pack("BB", socket.BT_SECURITY_MEDIUM, 0))
-                s.bind(("00:00:00:00:00:00", 0, 4, socket.BDADDR_LE_PUBLIC))
-                s.settimeout(2.5)
-                try:
-                    s.connect((BT_MAC, 0, 4, socket.BDADDR_LE_PUBLIC)); break
-                except OSError as e:
-                    if DEBUG:
-                        print(f"takeover attempt: {e!r}, bluez {'connected' if 'Connected: yes' in btctl('info', BT_MAC, t=2) else 'not connected'}", flush=True)
-                    s.close(); s = None; time.sleep(0.1)
+            s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP)
+            s.setsockopt(socket.SOL_BLUETOOTH, socket.BT_SECURITY, struct.pack("BB", socket.BT_SECURITY_MEDIUM, 0))
+            s.bind(("00:00:00:00:00:00", 0, 4, socket.BDADDR_LE_PUBLIC))
+            s.settimeout(12)
+            try:
+                s.connect((BT_MAC, 0, 4, socket.BDADDR_LE_PUBLIC))
+            except OSError as e:
+                if DEBUG:
+                    print(f"takeover: {e!r}", flush=True)
+                s.close(); s = None
             if s is None:
                 failed += 1
                 raise TimeoutError("takeover failed")
