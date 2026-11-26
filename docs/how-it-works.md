@@ -22,8 +22,8 @@ subscribes to the reports: buttons `0x3a` (the 13 bits of HID report `0xFB`), to
 
 The service scans (`bluetoothctl scan on`) only while it is looking for the remote and stops
 the scan once the takeover succeeds: a running scan takes radio time from every Bluetooth
-device. After the remote goes away it looks for two minutes, then sleeps so the remote can
-sleep too; *Search* in the plugin card (SIGUSR1) looks again. If the takeover keeps failing
+device. After the remote goes away it looks for two minutes, then stops scanning. It still checks
+for an existing BlueZ connection every five seconds. *Search* in the plugin card (SIGUSR1) starts a new scan. If the takeover keeps failing
 for 15 s, BlueZ is stuck and the adapter is power-cycled.
 
 `bin/fast-link` sets a 15 ms LE connection interval in `/etc/bluetooth/main.conf` (Apple

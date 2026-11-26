@@ -903,7 +903,7 @@ def bt_input_loop():
             # waits (kernel accept list resolves the remote's RPA) until the woken remote shows up
             # Search only for SEARCH_S after the remote went away (or the driver started): a remote
             # that is out of the room must not keep the radio busy. After that the driver sleeps
-            # until the card's "Search" (SIGUSR1) wakes it.
+            # until BlueZ reconnects or the card requests another active search.
             if first:
                 # Right after a driver restart the previous instance's link is still up for ~2 s
                 # while the kernel tears it down: taken for a fresh BlueZ connection, the takeover
@@ -922,11 +922,16 @@ def bt_input_loop():
                     if scanner and scanner.poll() is None:
                         scanner.kill()
                     scanner = None
+                    WAKE.clear()
                     publish(searching=False)
-                    print("remote not found, stopped searching", flush=True)
-                    WAKE.clear(); WAKE.wait()
+                    print("active search stopped, waiting for Bluetooth or Search", flush=True)
+                    # Read BlueZ's cached connection state without starting radio discovery.
+                    while not WAKE.wait(5):
+                        if "Connected: yes" in btctl("info", BT_MAC, t=3):
+                            break
                     search_t = time.time()
                     publish(searching=True)
+                    continue
                 # a running scan process is not enough: it outlives a bluetooth restart, discovery not
                 show = btctl("show", t=3)
                 if "Powered: no" in show:
